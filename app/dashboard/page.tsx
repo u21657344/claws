@@ -94,10 +94,16 @@ export default async function DashboardPage({
                   icon: "🤖",
                   name: d.agent_type,
                 };
+                const slackUrl = d.slack_channel_id
+                  ? `https://app.slack.com/client/${d.slack_team_id}/${d.slack_channel_id}`
+                  : `https://app.slack.com/client/${d.slack_team_id}`;
                 return (
-                  <div
+                  <a
                     key={d.id}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-3"
+                    href={slackUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-3 block hover:border-zinc-600 cursor-pointer transition-colors"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
@@ -131,7 +137,7 @@ export default async function DashboardPage({
                         year: "numeric",
                       })}
                     </p>
-                  </div>
+                  </a>
                 );
               })}
             </div>

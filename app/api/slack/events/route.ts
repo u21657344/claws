@@ -95,7 +95,7 @@ export async function POST(request: Request) {
     const db = createAdminClient();
     const { data: deployment, error } = await db
       .from("deployments")
-      .select("id, slack_access_token, slack_bot_user_id")
+      .select("id, slack_access_token, slack_bot_user_id, slack_channel_id, agent_type")
       .eq("slack_team_id", teamId)
       .eq("status", "active")
       .order("created_at", { ascending: false })
@@ -112,6 +112,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    // Auto-save slack_channel_id on first @mention
+    if (!deployment.slack_channel_id) {
+      await db.from("deployments")
+        .update({ slack_channel_id: channelId })
+        .eq("id", deployment.id);
+    }
+
     // Strip bot mention (<@UXXXXXXXX>) from the text
     const userText = rawText.replace(/<@[A-Z0-9]+>/g, "").trim();
 
@@ -126,6 +133,7 @@ export async function POST(request: Request) {
         channelId,
         threadTs: replyThreadTs,
         userText,
+        agentType: deployment.agent_type,
       })
     );
   }

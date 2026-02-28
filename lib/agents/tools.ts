@@ -84,6 +84,30 @@ export const toolDefinitions: Anthropic.Tool[] = [
       required: ["task_id"],
     },
   },
+  {
+    name: "update_task",
+    description: "Update the title or due date of an existing task.",
+    input_schema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "UUID of the task to update" },
+        title: { type: "string", description: "New title (optional)" },
+        due_date: { type: "string", description: "New due date YYYY-MM-DD, or null to clear (optional)" },
+      },
+      required: ["task_id"],
+    },
+  },
+  {
+    name: "delete_task",
+    description: "Permanently delete a task by its ID.",
+    input_schema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "UUID of the task to delete" },
+      },
+      required: ["task_id"],
+    },
+  },
 ];
 
 // ─── Tool executors ─────────────────────────────────────────────────────────
@@ -164,6 +188,23 @@ export async function executeTool(
         .eq("deployment_id", deploymentId);
       if (error) return `Error completing task: ${error.message}`;
       return `Task ${task_id} marked as complete.`;
+    }
+
+    case "update_task": {
+      const task_id = String(input.task_id);
+      const updates: Record<string, unknown> = {};
+      if (input.title !== undefined) updates.title = String(input.title);
+      if (input.due_date !== undefined) updates.due_date = input.due_date ? String(input.due_date) : null;
+      const { error } = await db.from("agent_tasks").update(updates).eq("id", task_id).eq("deployment_id", deploymentId);
+      if (error) return `Error updating task: ${error.message}`;
+      return `Task ${task_id} updated.`;
+    }
+
+    case "delete_task": {
+      const task_id = String(input.task_id);
+      const { error } = await db.from("agent_tasks").delete().eq("id", task_id).eq("deployment_id", deploymentId);
+      if (error) return `Error deleting task: ${error.message}`;
+      return `Task ${task_id} deleted.`;
     }
 
     default:

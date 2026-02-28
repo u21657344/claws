@@ -5,14 +5,25 @@ import { toolDefinitions, executeTool } from "./tools";
 
 const MAX_ITERATIONS = 10;
 
-const SYSTEM_PROMPT = `You are Claws, a helpful assistant deployed into a Slack workspace.
+function buildSystemPrompt(memoryContext: string): string {
+  return `You are Claws, a fully autonomous AI chief of staff deployed into this Slack workspace.
 
-Guidelines:
-- Be concise. Slack messages are short — skip long preambles.
-- No markdown headers (# or ##). Use plain text, bullet points with •, or *bold* for emphasis.
-- Use tools silently. Don't narrate what tool you're about to call; just do it and report the outcome naturally.
-- After using tools, reply in plain English with the result. Don't repeat raw tool output.
-- You have memory and a task list. Use them proactively to help the user.`;
+Core traits:
+- Confident and direct. No hedging, no filler phrases. No "I'll try to" or "I think".
+- Proactive — anticipate what the user actually needs beyond what they literally said.
+- Resourceful — you have web search, memory, and task management. Use them without being asked.
+- Concise — Slack messages are short. Use • bullets and *bold*. No markdown headers (# or ##).
+- Silent tool use — don't narrate what you're about to do, just do it and report the result.
+- Persistent memory — remember everything important. Store it. Recall it automatically.
+
+Capabilities:
+• Search the web for real-time information, news, prices, research
+• Remember facts about the user and their preferences
+• Manage a full task list (create, update, complete, delete)
+• Provide analysis, planning, research, and actionable recommendations
+
+You are always on, always available, always thinking ahead. Act like it.${memoryContext}`;
+}
 
 // ─── Persist helpers ────────────────────────────────────────────────────────
 
@@ -61,17 +72,30 @@ export async function runAssistantAgent({
   channelId,
   threadTs,
   userText,
+  agentType,
 }: {
   deploymentId: string;
   slackAccessToken: string;
   channelId: string;
   threadTs: string;
   userText: string;
+  agentType: string;
 }): Promise<void> {
   const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY!,
   });
   const slack = new WebClient(slackAccessToken);
+
+  // Load memories for system prompt injection
+  const db = createAdminClient();
+  const { data: memories } = await db
+    .from("agent_memories")
+    .select("key, value")
+    .eq("deployment_id", deploymentId);
+
+  const memoryContext = memories?.length
+    ? "\n\nWhat I know about you:\n" + memories.map((m) => `• ${m.key}: ${m.value}`).join("\n")
+    : "";
 
   // Build message history from DB + append current user message
   const history = await loadHistory(deploymentId, channelId, threadTs);
@@ -83,16 +107,23 @@ export async function runAssistantAgent({
     { role: "user", content: userContent },
   ];
 
+  const allTools: Anthropic.Tool[] = [
+    ...(toolDefinitions as Anthropic.Tool[]),
+    { type: "web_search_20260209", name: "web_search" } as unknown as Anthropic.Tool,
+  ];
+
   let finalText = "I wasn't able to generate a response. Please try again.";
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      tools: toolDefinitions,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response = (await anthropic.messages.create({
+      model: "claude-opus-4-6",
+      max_tokens: 8192,
+      thinking: { type: "adaptive" },
+      system: buildSystemPrompt(memoryContext),
+      tools: allTools,
       messages,
-    });
+    } as any)) as Anthropic.Message;
 
     // Persist assistant turn (full content array for tool_use blocks)
     await persistMessage(
@@ -106,8 +137,13 @@ export async function runAssistantAgent({
     // Append to local message list
     messages.push({ role: "assistant", content: response.content });
 
+    if (response.stop_reason === "pause_turn") {
+      // Web search in progress — loop continues with updated messages
+      continue;
+    }
+
     if (response.stop_reason === "end_turn") {
-      // Extract the last text block as the final reply
+      // Extract the last text block as the final reply (thinking blocks are skipped)
       const textBlock = response.content.find((b) => b.type === "text");
       if (textBlock && textBlock.type === "text") {
         finalText = textBlock.text;
