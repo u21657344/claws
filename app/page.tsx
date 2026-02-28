@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { signIn } from "next-auth/react";
 
 const agents = [
   {
@@ -128,6 +129,10 @@ const GoogleIcon = () => (
 export default function Home() {
   const [selectedAgent, setSelectedAgent] = useState("assistant");
   const [selectedChannel, setSelectedChannel] = useState("slack");
+
+  function handleSignIn() {
+    signIn("google", { callbackUrl: "/dashboard" });
+  }
 
   return (
     <div className="min-h-screen bg-[#080808] text-white font-sans overflow-x-hidden">
@@ -276,7 +281,10 @@ export default function Home() {
 
             {/* CTA */}
             <div className="space-y-3">
-              <button className="w-full flex items-center justify-center gap-3 rounded-xl bg-white text-black font-semibold py-3.5 hover:bg-zinc-100 transition-colors">
+              <button
+                onClick={handleSignIn}
+                className="w-full flex items-center justify-center gap-3 rounded-xl bg-white text-black font-semibold py-3.5 hover:bg-zinc-100 transition-colors"
+              >
                 <GoogleIcon />
                 Sign in with Google to deploy
               </button>
@@ -387,8 +395,11 @@ export default function Home() {
           <p className="text-zinc-500 mb-8">
             One click. Agents live. No engineers harmed in the making.
           </p>
-          <button className="inline-flex items-center gap-3 rounded-xl bg-white text-black font-semibold px-8 py-4 hover:bg-zinc-100 transition-colors"
-            style={{ boxShadow: "0 0 40px rgba(255,255,255,0.1)" }}>
+          <button
+            onClick={handleSignIn}
+            className="inline-flex items-center gap-3 rounded-xl bg-white text-black font-semibold px-8 py-4 hover:bg-zinc-100 transition-colors"
+            style={{ boxShadow: "0 0 40px rgba(255,255,255,0.1)" }}
+          >
             <GoogleIcon />
             Sign in with Google — it&apos;s free
           </button>
