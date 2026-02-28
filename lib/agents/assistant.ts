@@ -136,6 +136,8 @@ export async function runAssistantAgent({
         })
       );
 
+      // Persist tool results so history round-trips correctly
+      await persistMessage(deploymentId, channelId, threadTs, "user", toolResults);
       messages.push({ role: "user", content: toolResults });
       continue;
     }
