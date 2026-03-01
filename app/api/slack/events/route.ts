@@ -1,3 +1,5 @@
+export const maxDuration = 300; // 5 min — allows full web search + tool loops
+
 import { NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import { createAdminClient } from "@/lib/supabase";
@@ -134,7 +136,55 @@ export async function POST(request: Request) {
         threadTs: replyThreadTs,
         userText,
         agentType: deployment.agent_type,
-      })
+      }).catch((err) => console.error("[mention agent error]", err))
+    );
+  }
+
+  // ─── Direct messages ───────────────────────────────────────────────────────
+  const channelStr = String(event?.channel ?? "");
+  if (
+    payload.type === "event_callback" &&
+    event?.type === "message" &&
+    (event?.channel_type === "im" || channelStr.startsWith("D")) &&
+    !event?.subtype &&   // skip bot_message, message_changed, message_deleted, etc.
+    !event?.bot_id       // skip messages posted by bots
+  ) {
+    const teamId = String(payload.team_id ?? "");
+    const channelId = channelStr;
+    const userId = String(event.user ?? "");
+    const userText = String(event.text ?? "").trim();
+
+    if (!userText) return NextResponse.json({ ok: true });
+
+    const db = createAdminClient();
+    const { data: deployment, error } = await db
+      .from("deployments")
+      .select("id, slack_access_token, slack_bot_user_id, agent_type")
+      .eq("slack_team_id", teamId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !deployment) {
+      return NextResponse.json({ ok: true });
+    }
+
+    // Guard: skip if the event was sent by the bot itself
+    if (userId === deployment.slack_bot_user_id) {
+      return NextResponse.json({ ok: true });
+    }
+
+    // Use channel ID as the thread key — groups the whole DM conversation as one history
+    waitUntil(
+      runAssistantAgent({
+        deploymentId: deployment.id,
+        slackAccessToken: deployment.slack_access_token,
+        channelId,
+        threadTs: channelId,
+        userText,
+        agentType: deployment.agent_type,
+      }).catch((err) => console.error("[dm agent error]", err))
     );
   }
 

@@ -86,6 +86,15 @@ export async function runAssistantAgent({
   });
   const slack = new WebClient(slackAccessToken);
 
+  // Post placeholder immediately so the user knows the bot is alive
+  // For DMs, threadTs is the channel ID (not a real timestamp) — omit thread_ts in that case
+  const posted = await slack.chat.postMessage({
+    channel: channelId,
+    ...(threadTs.includes(".") ? { thread_ts: threadTs } : {}),
+    text: "●",
+  });
+  const replyTs = posted.ts!;
+
   // Load memories for system prompt injection
   const db = createAdminClient();
   const { data: memories } = await db
@@ -112,51 +121,70 @@ export async function runAssistantAgent({
     { type: "web_search_20260209", name: "web_search" } as unknown as Anthropic.Tool,
   ];
 
-  let finalText = "I wasn't able to generate a response. Please try again.";
-
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = (await anthropic.messages.create({
-      model: "claude-opus-4-6",
-      max_tokens: 8192,
-      thinking: { type: "adaptive" },
+    let streamedText = "";
+    let lastUpdateMs = 0;
+
+    const stream = anthropic.messages.stream({
+      model: "claude-sonnet-4-6",
+      max_tokens: 4096,
       system: buildSystemPrompt(memoryContext),
       tools: allTools,
       messages,
-    } as any)) as Anthropic.Message;
+    });
 
-    // Persist assistant turn (full content array for tool_use blocks)
-    await persistMessage(
-      deploymentId,
-      channelId,
-      threadTs,
-      "assistant",
-      response.content
-    );
+    for await (const event of stream) {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "text_delta"
+      ) {
+        streamedText += event.delta.text;
+        const now = Date.now();
+        if (now - lastUpdateMs >= 1000) {
+          lastUpdateMs = now;
+          try {
+            await slack.chat.update({ channel: channelId, ts: replyTs, text: streamedText });
+          } catch {
+            // ignore transient update failures
+          }
+        }
+      }
+    }
 
-    // Append to local message list
+    const response = await stream.finalMessage();
+
+    // Always push full content to local messages first (thinking blocks valid in-session)
     messages.push({ role: "assistant", content: response.content });
 
     if (response.stop_reason === "pause_turn") {
-      // Web search in progress — loop continues with updated messages
+      // Web search in-flight — transient state, never write to DB
       continue;
     }
 
+    // Strip thinking blocks before writing to DB (session-scoped, break on replay)
+    const persistable = response.content.filter((b) => b.type !== "thinking");
+    await persistMessage(deploymentId, channelId, threadTs, "assistant", persistable);
+
     if (response.stop_reason === "end_turn") {
-      // Extract the last text block as the final reply (thinking blocks are skipped)
       const textBlock = response.content.find((b) => b.type === "text");
       if (textBlock && textBlock.type === "text") {
-        finalText = textBlock.text;
+        await slack.chat.update({ channel: channelId, ts: replyTs, text: textBlock.text });
       }
       break;
     }
 
     if (response.stop_reason === "tool_use") {
+      // Show working indicator during tool execution
+      try {
+        await slack.chat.update({ channel: channelId, ts: replyTs, text: "🔧 Working…" });
+      } catch {
+        // ignore
+      }
+
       const toolUseBlocks = response.content.filter(
         (b) => b.type === "tool_use"
       ) as Anthropic.ToolUseBlock[];
 
-      // Execute all tool calls concurrently
       const toolResults = await Promise.all(
         toolUseBlocks.map(async (block) => {
           const result = await executeTool(
@@ -172,7 +200,6 @@ export async function runAssistantAgent({
         })
       );
 
-      // Persist tool results so history round-trips correctly
       await persistMessage(deploymentId, channelId, threadTs, "user", toolResults);
       messages.push({ role: "user", content: toolResults });
       continue;
@@ -181,11 +208,4 @@ export async function runAssistantAgent({
     // Unexpected stop reason — stop the loop
     break;
   }
-
-  // Post reply to Slack in-thread
-  await slack.chat.postMessage({
-    channel: channelId,
-    thread_ts: threadTs,
-    text: finalText,
-  });
 }
