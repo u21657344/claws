@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 const agents = [
   { id: "orchestrator", name: "Claws Orchestrator", icon: "⚡", description: "Auto-routes to the right specialist" },
@@ -14,10 +13,9 @@ const agents = [
 export default function DeployButton() {
   const [selectedAgent, setSelectedAgent] = useState("assistant");
   const [open, setOpen] = useState(false);
-  const router = useRouter();
 
   function handleConnectSlack() {
-    router.push(`/api/slack/install?agent_type=${selectedAgent}`);
+    window.location.href = `/api/slack/install?agent_type=${selectedAgent}`;
   }
 
   return (
