@@ -142,6 +142,14 @@ export async function POST(request: Request) {
 
   // ─── Direct messages ───────────────────────────────────────────────────────
   const channelStr = String(event?.channel ?? "");
+  console.log("[dm debug] event", {
+    payloadType: payload.type,
+    eventType: event?.type,
+    channelType: event?.channel_type,
+    channel: channelStr,
+    subtype: event?.subtype,
+    botId: event?.bot_id,
+  });
   if (
     payload.type === "event_callback" &&
     event?.type === "message" &&
@@ -153,6 +161,8 @@ export async function POST(request: Request) {
     const channelId = channelStr;
     const userId = String(event.user ?? "");
     const userText = String(event.text ?? "").trim();
+
+    console.log("[dm debug] entered block", { teamId, channelId, userId, userText });
 
     if (!userText) return NextResponse.json({ ok: true });
 
@@ -166,12 +176,15 @@ export async function POST(request: Request) {
       .limit(1)
       .single();
 
+    console.log("[dm debug] deployment lookup", { found: !!deployment, error: error?.message });
+
     if (error || !deployment) {
       return NextResponse.json({ ok: true });
     }
 
     // Guard: skip if the event was sent by the bot itself
     if (userId === deployment.slack_bot_user_id) {
+      console.log("[dm debug] skipping bot's own message");
       return NextResponse.json({ ok: true });
     }
 
