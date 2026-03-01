@@ -4,7 +4,7 @@ import { CustomAdapter } from "@/lib/auth-adapter";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
-  providers: [Google({ checks: ["state"] })],
+  providers: [Google({ checks: ["state"], allowDangerousEmailAccountLinking: true })],
   adapter: CustomAdapter(),
   session: {
     strategy: "database",
