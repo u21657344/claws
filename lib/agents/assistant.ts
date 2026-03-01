@@ -75,6 +75,36 @@ ${profile.capabilities}
 You are always on, always available, always thinking ahead. Act like it.${memoryContext}`;
 }
 
+// ─── Orchestrator routing ────────────────────────────────────────────────────
+
+const AGENT_LABELS: Record<string, string> = {
+  assistant: "Claws Assistant",
+  dev: "Claws Code",
+  content: "Claws Content",
+  sales: "Claws Outreach",
+};
+
+async function routeMessage(anthropic: Anthropic, userText: string): Promise<string> {
+  const response = await anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 10,
+    system: `You route messages to the right specialist. Reply with exactly one word:
+- "dev"       — coding, debugging, architecture, technical questions
+- "content"   — writing, editing, social media, copy, blog posts
+- "sales"     — outreach, prospects, pipeline, deals, CRM
+- "assistant" — everything else (planning, research, general tasks)`,
+    messages: [{ role: "user", content: userText }],
+  });
+
+  const text =
+    response.content[0]?.type === "text"
+      ? response.content[0].text.trim().toLowerCase()
+      : "assistant";
+
+  const valid = ["dev", "content", "sales", "assistant"];
+  return valid.includes(text) ? text : "assistant";
+}
+
 // ─── Persist helpers ────────────────────────────────────────────────────────
 
 async function loadHistory(
@@ -145,6 +175,16 @@ export async function runAssistantAgent({
   });
   const replyTs = posted.ts!;
 
+  // Orchestrator: route to the right specialist before doing anything else
+  let effectiveAgentType = agentType;
+  if (agentType === "orchestrator") {
+    effectiveAgentType = await routeMessage(anthropic, userText);
+    const label = AGENT_LABELS[effectiveAgentType] ?? "Claws";
+    try {
+      await slack.chat.update({ channel: channelId, ts: replyTs, text: `_↳ ${label}_ ●` });
+    } catch {}
+  }
+
   // Load memories for system prompt injection
   const db = createAdminClient();
   const { data: memories } = await db
@@ -178,7 +218,7 @@ export async function runAssistantAgent({
     const stream = anthropic.messages.stream({
       model: "claude-sonnet-4-6",
       max_tokens: 4096,
-      system: buildSystemPrompt(agentType, memoryContext),
+      system: buildSystemPrompt(effectiveAgentType, memoryContext),
       tools: allTools,
       messages,
     });

@@ -4,10 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 const agents = [
-  { id: "assistant", name: "Claws Assistant", icon: "🧠" },
-  { id: "dev", name: "Claws Code", icon: "💻" },
-  { id: "content", name: "Claws Content", icon: "✍️" },
-  { id: "sales", name: "Claws Outreach", icon: "📈" },
+  { id: "orchestrator", name: "Claws Orchestrator", icon: "⚡", description: "Auto-routes to the right specialist" },
+  { id: "assistant", name: "Claws Assistant", icon: "🧠", description: "General chief of staff" },
+  { id: "dev", name: "Claws Code", icon: "💻", description: "Engineering lead" },
+  { id: "content", name: "Claws Content", icon: "✍️", description: "Content strategist" },
+  { id: "sales", name: "Claws Outreach", icon: "📈", description: "Sales operator" },
 ];
 
 export default function DeployButton() {
@@ -49,14 +50,17 @@ export default function DeployButton() {
                 <button
                   key={agent.id}
                   onClick={() => setSelectedAgent(agent.id)}
-                  className={`rounded-xl border p-3 text-left transition-all flex items-center gap-3 ${
+                  className={`rounded-xl border p-3 text-left transition-all flex items-start gap-3 ${
                     selectedAgent === agent.id
                       ? "border-violet-500/60 bg-violet-500/10"
                       : "border-zinc-800 hover:border-zinc-600"
                   }`}
                 >
-                  <span className="text-lg">{agent.icon}</span>
-                  <span className="text-sm font-medium">{agent.name}</span>
+                  <span className="text-lg mt-0.5">{agent.icon}</span>
+                  <div>
+                    <div className="text-sm font-medium">{agent.name}</div>
+                    <div className="text-xs text-zinc-500 mt-0.5">{agent.description}</div>
+                  </div>
                 </button>
               ))}
             </div>
