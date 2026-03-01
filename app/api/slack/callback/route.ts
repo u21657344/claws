@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
   if (!tokenData.ok) {
     console.error("[slack callback error]", tokenData.error, JSON.stringify(tokenData));
-    return NextResponse.redirect(`${appUrl}/dashboard?slack_error=1`);
+    return NextResponse.redirect(`${appUrl}/dashboard?slack_error=${encodeURIComponent(tokenData.error ?? "unknown")}`);
   }
 
   const supabase = createAdminClient();
