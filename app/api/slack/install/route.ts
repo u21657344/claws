@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     JSON.stringify({ userId: session.user.id, agentType })
   ).toString("base64url");
 
-  const scopes = "chat:write,commands,channels:read,users:read,app_mentions:read";
+  const scopes = "chat:write,app_mentions:read,channels:read,users:read,im:history,im:read";
   const slackUrl = new URL("https://slack.com/oauth/v2/authorize");
   slackUrl.searchParams.set("client_id", process.env.SLACK_CLIENT_ID!);
   slackUrl.searchParams.set("scope", scopes);
