@@ -5,10 +5,15 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
+  const slackError = searchParams.get("error");
   const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
 
+  if (slackError) {
+    return NextResponse.redirect(`${appUrl}/dashboard?slack_error=${encodeURIComponent(slackError)}`);
+  }
+
   if (!code || !state) {
-    return NextResponse.redirect(`${appUrl}/dashboard?slack_error=1`);
+    return NextResponse.redirect(`${appUrl}/dashboard?slack_error=missing_code`);
   }
 
   let userId: string;
@@ -18,7 +23,7 @@ export async function GET(request: Request) {
     userId = decoded.userId;
     agentType = decoded.agentType;
   } catch {
-    return NextResponse.redirect(`${appUrl}/dashboard?slack_error=1`);
+    return NextResponse.redirect(`${appUrl}/dashboard?slack_error=invalid_state`);
   }
 
   // Exchange code for access token
