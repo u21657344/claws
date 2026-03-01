@@ -85,6 +85,10 @@ export async function POST(request: Request) {
 
   const event = payload.event as Record<string, unknown> | undefined;
 
+  // Identify which bot received this event — used for multi-agent workspace support
+  const authorizations = payload.authorizations as Array<Record<string, unknown>> | undefined;
+  const receivingBotId = String(authorizations?.[0]?.user_id ?? "");
+
   if (payload.type === "event_callback" && event?.type === "app_mention") {
     const teamId = String(payload.team_id ?? "");
     const channelId = String(event.channel ?? "");
@@ -93,13 +97,18 @@ export async function POST(request: Request) {
     const userId = String(event.user ?? "");
     const rawText = String(event.text ?? "");
 
-    // Look up the deployment for this Slack workspace
+    // Look up the exact deployment that received this mention
     const db = createAdminClient();
-    const { data: deployment, error } = await db
+    const query = db
       .from("deployments")
       .select("id, slack_access_token, slack_bot_user_id, slack_channel_id, agent_type")
       .eq("slack_team_id", teamId)
-      .eq("status", "active")
+      .eq("status", "active");
+
+    // Match by bot user ID when available so multiple agents in the same workspace route correctly
+    if (receivingBotId) query.eq("slack_bot_user_id", receivingBotId);
+
+    const { data: deployment, error } = await query
       .order("created_at", { ascending: false })
       .limit(1)
       .single();
@@ -157,11 +166,15 @@ export async function POST(request: Request) {
     if (!userText) return NextResponse.json({ ok: true });
 
     const db = createAdminClient();
-    const { data: deployment, error } = await db
+    const dmQuery = db
       .from("deployments")
       .select("id, slack_access_token, slack_bot_user_id, agent_type")
       .eq("slack_team_id", teamId)
-      .eq("status", "active")
+      .eq("status", "active");
+
+    if (receivingBotId) dmQuery.eq("slack_bot_user_id", receivingBotId);
+
+    const { data: deployment, error } = await dmQuery
       .order("created_at", { ascending: false })
       .limit(1)
       .single();
