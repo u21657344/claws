@@ -166,10 +166,7 @@ export async function runAssistantAgent({
     await persistMessage(deploymentId, channelId, threadTs, "assistant", persistable);
 
     if (response.stop_reason === "end_turn") {
-      const textBlock = response.content.find((b) => b.type === "text");
-      if (textBlock && textBlock.type === "text") {
-        await slack.chat.update({ channel: channelId, ts: replyTs, text: textBlock.text });
-      }
+      await slack.chat.update({ channel: channelId, ts: replyTs, text: streamedText });
       break;
     }
 
