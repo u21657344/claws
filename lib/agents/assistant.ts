@@ -121,10 +121,10 @@ export async function runAssistantAgent({
     { type: "web_search_20260209", name: "web_search" } as unknown as Anthropic.Tool,
   ];
 
-  for (let i = 0; i < MAX_ITERATIONS; i++) {
-    let streamedText = "";
-    let lastUpdateMs = 0;
+  let streamedText = "";
+  let lastUpdateMs = 0;
 
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
     const stream = anthropic.messages.stream({
       model: "claude-sonnet-4-6",
       max_tokens: 4096,
@@ -180,6 +180,7 @@ export async function runAssistantAgent({
       } catch {
         // ignore
       }
+      streamedText = ""; // reset so next stream builds fresh after the indicator
 
       const toolUseBlocks = response.content.filter(
         (b) => b.type === "tool_use"
