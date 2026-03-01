@@ -76,7 +76,7 @@ grant all on next_auth.verification_tokens to service_role;
 create table if not exists public.deployments (
   id                  uuid        primary key default gen_random_uuid(),
   user_id             uuid        not null references next_auth.users(id) on delete cascade,
-  agent_type          text        not null check (agent_type in ('assistant', 'dev', 'content', 'sales')),
+  agent_type          text        not null check (agent_type in ('assistant', 'dev', 'content', 'sales', 'orchestrator')),
   channel             text        not null default 'slack',
   status              text        not null default 'active' check (status in ('active', 'inactive', 'error')),
   slack_team_id       text,
