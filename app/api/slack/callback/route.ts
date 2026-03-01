@@ -26,13 +26,18 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${appUrl}/dashboard?slack_error=invalid_state`);
   }
 
+  // Use agent-type-specific credentials for token exchange (must match what initiated the OAuth)
+  const typeKey = agentType.toUpperCase();
+  const clientId = process.env[`SLACK_CLIENT_ID_${typeKey}`] ?? process.env.SLACK_CLIENT_ID!;
+  const clientSecret = process.env[`SLACK_CLIENT_SECRET_${typeKey}`] ?? process.env.SLACK_CLIENT_SECRET!;
+
   // Exchange code for access token
   const tokenRes = await fetch("https://slack.com/api/oauth.v2.access", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: process.env.SLACK_CLIENT_ID!,
-      client_secret: process.env.SLACK_CLIENT_SECRET!,
+      client_id: clientId,
+      client_secret: clientSecret,
       code,
       redirect_uri: process.env.SLACK_REDIRECT_URI!,
     }),

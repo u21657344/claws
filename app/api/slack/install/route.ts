@@ -14,9 +14,13 @@ export async function GET(request: Request) {
     JSON.stringify({ userId: session.user.id, agentType })
   ).toString("base64url");
 
+  // Use agent-type-specific app credentials if available, fall back to default
+  const typeKey = agentType.toUpperCase();
+  const clientId = process.env[`SLACK_CLIENT_ID_${typeKey}`] ?? process.env.SLACK_CLIENT_ID!;
+
   const scopes = "chat:write,app_mentions:read,channels:read,users:read,im:history,im:read";
   const slackUrl = new URL("https://slack.com/oauth/v2/authorize");
-  slackUrl.searchParams.set("client_id", process.env.SLACK_CLIENT_ID!);
+  slackUrl.searchParams.set("client_id", clientId);
   slackUrl.searchParams.set("scope", scopes);
   slackUrl.searchParams.set("redirect_uri", process.env.SLACK_REDIRECT_URI!);
   slackUrl.searchParams.set("state", state);
