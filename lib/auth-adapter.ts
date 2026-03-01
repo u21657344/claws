@@ -61,14 +61,20 @@ export function CustomAdapter(): Adapter {
 
     async getUserByAccount({ providerAccountId, provider }) {
       const sb = createAdminClient();
-      const { data, error } = await sb
+      const { data: account, error } = await sb
         .from("auth_accounts")
-        .select("auth_users(*)")
+        .select("user_id")
         .match({ provider, provider_account_id: providerAccountId })
         .maybeSingle();
       if (error) throw error;
-      if (!data?.auth_users) return null;
-      return toUser(data.auth_users as unknown as Record<string, unknown>);
+      if (!account?.user_id) return null;
+      const { data: user, error: userError } = await sb
+        .from("auth_users")
+        .select()
+        .eq("id", account.user_id)
+        .maybeSingle();
+      if (userError) throw userError;
+      return user ? toUser(user) : null;
     },
 
     async updateUser(user) {
@@ -90,7 +96,7 @@ export function CustomAdapter(): Adapter {
 
     async linkAccount(account) {
       const sb = createAdminClient();
-      const { error } = await sb.from("auth_accounts").insert({
+      const { error } = await sb.from("auth_accounts").upsert({
         user_id: account.userId,
         type: account.type,
         provider: account.provider,
@@ -102,7 +108,7 @@ export function CustomAdapter(): Adapter {
         scope: account.scope ?? null,
         id_token: account.id_token ?? null,
         session_state: account.session_state ?? null,
-      });
+      }, { onConflict: "provider,provider_account_id" });
       if (error) throw error;
     },
 
