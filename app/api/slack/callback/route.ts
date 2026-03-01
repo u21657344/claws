@@ -58,7 +58,8 @@ export async function GET(request: Request) {
   });
 
   if (error) {
-    return NextResponse.redirect(`${appUrl}/dashboard?slack_error=1`);
+    console.error("[slack callback db error]", error);
+    return NextResponse.redirect(`${appUrl}/dashboard?slack_error=${encodeURIComponent(error.code ?? error.message ?? "db_error")}`);
   }
 
   return NextResponse.redirect(`${appUrl}/dashboard?connected=1`);
